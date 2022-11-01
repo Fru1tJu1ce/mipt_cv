@@ -70,12 +70,63 @@ def finding_biggest_cont(contours):
     return res
 
 
+def finding_tail(image):
+    """Выделяет маску хвоста на изображении."""
+    # Gamma correction
+    image = skimage.exposure.adjust_gamma(image, gamma=0.03)
+
+    # Canny + blur + thres
+    canny = cv2.Canny(image, 7, 8)
+    canny = cv2.GaussianBlur(canny, ksize=(51, 51), sigmaX=2, sigmaY=2)
+    canny = cv2.threshold(canny, 1, 255, cv2.THRESH_BINARY_INV)[1]
+
+    # MorphologyEx
+    kernel = np.ones((25, 25), np.uint8)
+    cor_image = cv2.morphologyEx(canny, cv2.MORPH_CLOSE, kernel)
+    kernel = np.ones((10, 10), np.uint8)
+    cor_image = cv2.morphologyEx(cor_image, cv2.MORPH_OPEN, kernel)
+
+    # Contours + draw them on the mask
+    contours = cv2.findContours(cor_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+    num_of_cont = finding_biggest_cont(contours)
+    mask = np.zeros(cor_image.shape, dtype=np.uint8)
+
+    # Boxing contour
+    rect = cv2.minAreaRect(contours[num_of_cont])
+    cv2.drawContours(mask, contours, num_of_cont, (255), -1)
+
+    # draw rect
+    img = mask.copy()
+    box = cv2.boxPoints(rect)
+    box = np.int0(box)
+    cv2.drawContours(img, [box], 0, (255), 1)
+    plot_image(img)
+
+    return mask, rect
+
+
+def mod_rotation(image, angle):
+    h, w, _ = image.shape
+    center_y, center_x = h // 2, w // 2
+
+    rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), angle, 1)
+    cos = np.abs(rotation_matrix[0][0])
+    sin = np.abs(rotation_matrix[0][1])
+    new_w = int((h * sin) + (w * cos))
+    new_h = int((h * cos) + (w * sin))
+    rotation_matrix[0][2] += new_w / 2 - center_x
+    rotation_matrix[1][2] += new_h / 2 - center_y
+    rotated = cv2.warpAffine(image, rotation_matrix, (new_w, new_h))
+    return rotated
+
+
 def object_box(object):
     """Помещает объект в коробку"""
+    # plot_one_img(object)
     xmin, ymin, xmax, ymax = 0, 0, 0, 0
-    for i in range(0, len(object)):
+    for i in range(0, len(object) - 1):
         if xmin == 0:
-            for j in range(0, len(object[0])):
+            for j in range(0, len(object[0]) - 1):
                 if (object[i, j] != 0).all():
                     xmin = i
                     break
@@ -112,39 +163,19 @@ def object_box(object):
     return xmin, ymin, xmax, ymax
 
 
-def finding_tail(image):
-    """Выделяет маску хваоста на изображении."""
-    # Gamma correction
-    image = skimage.exposure.adjust_gamma(image, gamma=0.03)
-
-    # Canny + blur + thres
-    canny = cv2.Canny(image, 7, 8)
-    canny = cv2.GaussianBlur(canny, ksize=(51, 51), sigmaX=2, sigmaY=2)
-    canny = cv2.threshold(canny, 1, 255, cv2.THRESH_BINARY_INV)[1]
-
-    # MorphologyEx
-    kernel = np.ones((25, 25), np.uint8)
-    cor_image = cv2.morphologyEx(canny, cv2.MORPH_CLOSE, kernel)
-    kernel = np.ones((10, 10), np.uint8)
-    cor_image = cv2.morphologyEx(cor_image, cv2.MORPH_OPEN, kernel)
-
-    # Contours + draw them on the mask
-    contours = cv2.findContours(cor_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
-    num_of_cont = finding_biggest_cont(contours)
-    mask = np.zeros(cor_image.shape, dtype=np.uint8)
-    cv2.drawContours(mask, contours, num_of_cont, (255), -1)
-
-    return mask
-
-
-image = initialize_picture('images/test_image_03.jpg')
+image = initialize_picture('images/test_image_10.jpg')
 hist = img_hist_and_plot(image)
 image_r = image[:, :, 0]
 
-mask = finding_tail(image_r)
+mask, rect = finding_tail(image_r)
+angle = rect[2]
+print('angle =', angle)
+if angle > 45:
+    angle = rect[2] - 90
 plot_images(image, mask)
 
 masked_image = cv2.bitwise_and(image, image, mask=mask)
+masked_image = mod_rotation(masked_image, angle)
 xmin, ymin, xmax, ymax = object_box(masked_image)
-new_img = masked_image[xmin:xmax, ymin: ymax]
-plot_image(new_img)
+
+plot_image(masked_image[xmin: xmax, ymin: ymax])
