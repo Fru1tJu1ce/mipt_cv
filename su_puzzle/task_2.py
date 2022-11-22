@@ -48,7 +48,7 @@ def _stitch_images(image, img, matches, kp1, kp2):
         return 1
 
 
-def match_images(images: list) -> None:
+def match_images(images: list) -> list:
     """Сопоставляет картинки"""
     hyp_params = dict(
         nfeatures=100,
