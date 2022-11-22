@@ -18,6 +18,7 @@ def crop(image):
 
 
 def plot_image(image, cmap=None):
+    """Отображает картинку"""
     plt.figure(figsize=(16, 9))
 
     plt.title("Сшитая картинка")
